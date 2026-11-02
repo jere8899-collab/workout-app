@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a19">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Lift Log</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="storage-warning"></div>
+  <main id="view" class="view"><p class="muted loading">Loading your training log…</p></main>
+  <div id="rest-bar" class="rest-bar" hidden></div>
+  <nav id="nav" class="nav" aria-label="Main"></nav>
+  <div id="sheet-host"></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script src="vendor/sql-wasm.js"></script>
+  <script type="module" src="app/main.js"></script>
+</body>
+</html>
