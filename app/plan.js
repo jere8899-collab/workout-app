@@ -4,7 +4,8 @@ import { h, sheet, field, numInput, numVal, toast, confirmSheet, badge } from '.
 import * as repo from '../lib/db/repo.js';
 import { repRangeFor } from '../lib/domain/recommend.js';
 import { formatRir } from '../lib/domain/rir.js';
-import { addExerciseSheet, startFromDay } from './session.js';
+import { startFromDay } from './session.js';
+import { addExerciseSheet } from './sheets.js';
 
 export function renderPlan(app) {
   const { db } = app;

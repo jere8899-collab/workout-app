@@ -19,6 +19,12 @@ export function renderSettings(app, section = 'general') {
     body);
 }
 
+function setTheme(db, value) {
+  repo.setSetting(db, 'theme', value);
+  document.documentElement.dataset.theme = value;
+  try { localStorage.setItem('theme', value); } catch { /* the saved setting is the fallback */ }
+}
+
 function general(app) {
   const { db } = app;
   const rest = repo.getSetting(db, 'rest_sec', {});
@@ -30,6 +36,8 @@ function general(app) {
     h('section', { class: 'card' }, h('h3', {}, 'Units'),
       segmented([['kg', 'Kilograms'], ['lb', 'Pounds']], app.units, (v) => { repo.setSetting(db, 'units', v); app.render(); }, 'Units'),
       h('p', { class: 'tiny muted' }, 'Everything is stored in kg; pounds are display only.')),
+    h('section', { class: 'card' }, h('h3', {}, 'Look'),
+      segmented([['dark', 'Dark'], ['light', 'Light'], ['system', 'Match phone']], repo.getSetting(db, 'theme', 'dark'), (v) => setTheme(db, v), 'Look')),
     h('section', { class: 'card' }, h('h3', {}, 'Default rest'),
       h('div', { class: 'grid3' }, field('Compound (s)', inputs.compound), field('Isolation (s)', inputs.isolation), field('Core (s)', inputs.core)),
       h('p', { class: 'tiny muted' }, 'Compounds usually 2–3 min, isolation 90–120 s. Plans and machines can override.'),

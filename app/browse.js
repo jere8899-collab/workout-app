@@ -2,7 +2,7 @@
 import { h, badge, segmented, lineChart, longDate, shortDate, field, numInput, numVal, toast, confirmSheet } from './ui.js';
 import * as repo from '../lib/db/repo.js';
 import { personalRecords, sessionSeries } from '../lib/domain/progress.js';
-import { isWorking, effectiveReps } from '../lib/domain/sets.js';
+import { effectiveReps } from '../lib/domain/sets.js';
 import { recommendNextSet, repRangeFor } from '../lib/domain/recommend.js';
 import { formatRir } from '../lib/domain/rir.js';
 import { sessionRow } from './session.js';
@@ -155,4 +155,3 @@ function machineSettings(app, v, rmin, rmax, others) {
         } }, 'Merge into selected'))));
 }
 
-export { isWorking };

@@ -94,7 +94,3 @@ export function completeSetup(db, { jsonText = null, augustMdText = null } = {})
   return report;
 }
 
-export async function replaceDatabase(db, bytes) {
-  await idbPut(bytes);
-  location.reload();
-}

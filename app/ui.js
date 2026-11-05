@@ -73,73 +73,9 @@ export function numInput(value, { step = 'any', min, placeholder, inputmode = 'd
 
 export const numVal = (inp) => (inp.value === '' ? null : Number(inp.value));
 
-// Big +/− stepper. get()/set() work in kg; display may be lb.
-export function stepper({ label, value, step, min = 0, unit = '', decimals = 2, onChange, toDisplay = (x) => x, fromDisplay = (x) => x, ariaLabel }) {
-  let v = value;
-  const inp = h('input', {
-    type: 'text', inputmode: 'decimal', class: 'step-val', 'aria-label': ariaLabel || label,
-    value: v === null || v === undefined ? '' : fmtNum(toDisplay(v), decimals),
-  });
-  const set = (nv, fire = true) => {
-    v = nv === null ? null : Math.max(min, Math.round(nv * 1000) / 1000);
-    inp.value = v === null ? '' : fmtNum(toDisplay(v), decimals);
-    if (fire) onChange?.(v);
-  };
-  inp.addEventListener('change', () => {
-    const n = parseFloat(inp.value.replace(',', '.'));
-    set(Number.isFinite(n) ? fromDisplay(n) : null);
-  });
-  inp.addEventListener('focus', () => inp.select());
-  const stepKg = () => (typeof step === 'function' ? step() : step);
-  const el = h('div', { class: 'stepper' },
-    label && h('div', { class: 'step-label' }, label, unit && h('span', { class: 'unit' }, ` ${unit}`)),
-    h('div', { class: 'step-row' },
-      h('button', { class: 'step-btn', type: 'button', 'aria-label': `Decrease ${label}`, onclick: () => set((v ?? 0) - stepKg()) }, '−'),
-      inp,
-      h('button', { class: 'step-btn', type: 'button', 'aria-label': `Increase ${label}`, onclick: () => set((v ?? 0) + stepKg()) }, '+')));
-  el.get = () => v;
-  el.set = set;
-  return el;
-}
-
 export function fmtNum(n, dp = 2) {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
   return String(Math.round(n * 10 ** dp) / 10 ** dp);
-}
-
-// RIR chips: tap one value for exact, a second for a range; "?" = not reported.
-export function rirPicker({ value = null, onChange, label = 'RIR' }) {
-  let sel = parseSel(value);
-  const vals = [0, 1, 2, 3, 4, 5];
-  const row = h('div', { class: 'chips', role: 'group', 'aria-label': label });
-  const out = h('div', { class: 'rir-picker' }, h('div', { class: 'step-label' }, label, h('span', { class: 'unit' }, ' reps in reserve')), row);
-  function draw() {
-    row.replaceChildren(
-      ...vals.map((n) => {
-        const on = sel && n >= sel[0] && n <= (sel[1] ?? sel[0]);
-        return h('button', { type: 'button', class: `chip ${on ? 'on' : ''}`, 'aria-pressed': on ? 'true' : 'false', onclick: () => pick(n) }, n === 5 ? '5+' : String(n));
-      }),
-      h('button', { type: 'button', class: `chip ghost ${sel ? '' : 'on'}`, 'aria-pressed': sel ? 'false' : 'true', onclick: () => { sel = null; draw(); onChange?.(null); } }, 'not sure'),
-    );
-  }
-  function pick(n) {
-    if (sel && sel[1] === undefined && Math.abs(n - sel[0]) === 1) sel = [Math.min(n, sel[0]), Math.max(n, sel[0])];
-    else sel = [n];
-    draw();
-    onChange?.(str());
-  }
-  const str = () => (!sel ? null : sel[1] !== undefined ? `${sel[0]}–${sel[1]}` : sel[0] === 5 ? '5+' : String(sel[0]));
-  out.get = str;
-  out.set = (v) => { sel = parseSel(v); draw(); };
-  draw();
-  return out;
-}
-
-function parseSel(v) {
-  if (v === null || v === undefined || v === '') return null;
-  const m = String(v).match(/(\d+)(?:\s*[–-]\s*(\d+))?/);
-  if (!m) return null;
-  return m[2] ? [Number(m[1]), Number(m[2])] : [Math.min(5, Number(m[1]))];
 }
 
 export function segmented(options, value, onChange, ariaLabel) {

@@ -1,21 +1,20 @@
 import { boot, storage, completeSetup } from './store.js';
 import { restoreBackup } from '../lib/io/export.js';
-import { h, toast, pickFiles } from './ui.js';
+import { h, toast, pickFiles, fmtNum } from './ui.js';
 import { getSetting, setSetting, activeSession } from '../lib/db/repo.js';
 import { REST_DEFAULT_SEC } from '../lib/catalog.js';
-import { formatDuration } from '../lib/domain/time.js';
 import { renderToday, renderSession } from './session.js';
 import { renderHistory, renderExercises, renderExercise } from './browse.js';
 import { renderPlan } from './plan.js';
 import { renderSettings } from './settings.js';
+import { closePad } from './pad.js';
+import { initStatus, refreshStatus } from './status.js';
 
 const LB = 2.20462;
 
 export const app = {
   db: null,
-  focus: {},       // sessionId -> focused session_exercise id
-  drafts: {},      // session_exercise id -> unsaved set entry
-  timer: null,     // { endAt, total, label }
+  timer: null,     // { endAt, total, label, setId }
   get units() { return getSetting(this.db, 'units', 'kg'); },
   toDisplay(kg) { return this.units === 'lb' ? kg * LB : kg; },
   fromDisplay(v) { return this.units === 'lb' ? v / LB : v; },
@@ -29,6 +28,9 @@ export const app = {
     const suffix = basis === 'per_side' ? '/side' : basis === 'per_limb' ? (/kick|leg|calf/i.test(exerciseName) ? '/leg' : '/arm') : '';
     return `${v} ${this.units}${suffix}`;
   },
+  fmtDisplay(kg) {
+    return kg === null || kg === undefined ? '–' : fmtNum(this.toDisplay(kg), 2);
+  },
   fmtVol(kg) {
     if (kg === null || kg === undefined) return '—';
     const v = this.toDisplay(kg);
@@ -40,66 +42,6 @@ export const app = {
   },
   render: () => render(),
 };
-
-// ------------------------------------------------------------ rest timer
-let tick = null;
-let beeped = false;
-export function startRest(sec, label = 'Rest') {
-  app.timer = { endAt: Date.now() + sec * 1000, total: sec, label };
-  beeped = false;
-  try { localStorage.setItem('rest_timer', JSON.stringify(app.timer)); } catch { /* storage optional */ }
-  drawTimer();
-}
-export function stopRest() {
-  app.timer = null;
-  try { localStorage.removeItem('rest_timer'); } catch { /* storage optional */ }
-  drawTimer();
-}
-function adjustRest(d) {
-  if (!app.timer) return;
-  app.timer.endAt += d * 1000;
-  app.timer.total += d;
-  try { localStorage.setItem('rest_timer', JSON.stringify(app.timer)); } catch { /* storage optional */ }
-  drawTimer();
-}
-function beep() {
-  try {
-    navigator.vibrate?.([300, 120, 300]);
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.frequency.value = 880;
-    g.gain.setValueAtTime(0.25, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-    o.connect(g).connect(ctx.destination);
-    o.start();
-    o.stop(ctx.currentTime + 0.6);
-  } catch { /* audio optional */ }
-}
-function drawTimer() {
-  const bar = document.getElementById('rest-bar');
-  if (!app.timer) {
-    bar.hidden = true;
-    return;
-  }
-  const left = Math.round((app.timer.endAt - Date.now()) / 1000);
-  const over = left <= 0;
-  if (over && !beeped) { beeped = true; beep(); }
-  const abs = Math.abs(left);
-  const t = `${over ? '+' : ''}${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, '0')}`;
-  const pct = Math.max(0, Math.min(1, 1 - left / app.timer.total));
-  bar.hidden = false;
-  bar.classList.toggle('over', over);
-  bar.replaceChildren(
-    h('div', { class: 'rest-fill', style: { width: `${pct * 100}%` } }),
-    h('div', { class: 'rest-inner' },
-      h('div', {}, h('div', { class: 'rest-label' }, over ? 'Rest done — go' : app.timer.label), h('div', { class: 'rest-time', 'aria-live': 'off' }, t)),
-      h('div', { class: 'row gap-s' },
-        h('button', { class: 'btn small', onclick: () => adjustRest(-15) }, '−15s'),
-        h('button', { class: 'btn small', onclick: () => adjustRest(15) }, '+15s'),
-        h('button', { class: 'btn small primary', onclick: stopRest }, over ? 'Done' : 'Skip'))),
-  );
-}
 
 // ------------------------------------------------------------ router
 const TABS = [
@@ -160,6 +102,7 @@ function renderSetup() {
 }
 
 function render() {
+  closePad();
   const view = document.getElementById('view');
   const hash = location.hash || '#/today';
   const [, route, arg] = hash.split('/');
@@ -183,6 +126,7 @@ function render() {
   window.scrollTo(0, y);
   const active = route === 'session' || !route ? '#/today' : route === 'exercise' ? '#/exercises' : `#/${route}`;
   document.querySelectorAll('#nav a').forEach((a) => a.setAttribute('aria-current', a.getAttribute('href') === active ? 'page' : 'false'));
+  if (!app.needsSetup) refreshStatus();
   if (storage.error) document.getElementById('storage-warning').replaceChildren(h('div', { class: 'warn-bar', role: 'alert' }, storage.error));
 }
 
@@ -194,17 +138,7 @@ async function start() {
     app.db = db;
     app.needsSetup = needsSetup;
     window.addEventListener('hashchange', render);
-    try {
-      const t = JSON.parse(localStorage.getItem('rest_timer') || 'null');
-      if (t && t.endAt > Date.now() - 10 * 60 * 1000) app.timer = t;
-    } catch { /* storage optional */ }
-    tick = setInterval(() => {
-      drawTimer();
-      document.querySelectorAll('[data-elapsed]').forEach((el) => {
-        const m = Math.max(0, Math.floor((Date.now() - Date.parse(el.dataset.elapsed)) / 1000));
-        el.textContent = formatDuration(m);
-      });
-    }, 1000);
+    initStatus(app);
     if (!location.hash) location.hash = activeSession(db) ? `#/session/${activeSession(db).id}` : '#/today';
     render();
     if (firstRun) announceImport(db, firstRun);
