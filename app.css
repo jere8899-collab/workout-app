@@ -175,6 +175,8 @@ section > .list-row { padding-left: 0; padding-right: 0; }
 .cell.active { outline: 2px solid var(--accent); outline-offset: 0; }
 .tick { grid-column: 6; grid-row: 1 / span 2; height: 42px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 1.15rem; font-weight: 800; cursor: pointer; }
 .tick.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+/* Only two-line rows need these to span both lines. */
+.set-row:not(.sided) .marker, .set-row:not(.sided) .tick { grid-row: 1; }
 .pr-note { font-size: 0.8rem; padding: 2px 4px 2px 40px; color: var(--text-2); }
 .pr-tag { background: var(--warn-bg); color: var(--warn-ink); font-weight: 800; font-size: 0.7rem; padding: 1px 6px; border-radius: 6px; }
 .list-row.selected { background: var(--accent-soft); border-radius: 10px; padding-left: 8px; }
