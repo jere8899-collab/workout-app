@@ -1,11 +1,16 @@
 // History list, exercise/machine list, and per-variant progress detail.
-import { h, badge, segmented, lineChart, longDate, shortDate, field, numInput, numVal, toast, confirmSheet } from './ui.js';
+import { h, sheet, badge, segmented, lineChart, longDate, shortDate, field, numInput, numVal, toast, confirmSheet } from './ui.js';
 import * as repo from '../lib/db/repo.js';
 import { personalRecords, sessionSeries } from '../lib/domain/progress.js';
 import { effectiveReps } from '../lib/domain/sets.js';
 import { recommendNextSet, repRangeFor } from '../lib/domain/recommend.js';
 import { formatRir } from '../lib/domain/rir.js';
 import { sessionRow } from './session.js';
+import { renderWeek, renderMonth, renderWeight } from './insights.js';
+import { bodyMap } from './bodymap.js';
+import { calendarMonth, monthName, addMonths, weekStart } from '../lib/domain/insights.js';
+import { addDays, todaySgt } from '../lib/domain/time.js';
+import { MUSCLES } from '../lib/muscles.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -13,21 +18,67 @@ let historyFilter = 'all';
 export function renderHistory(app) {
   const all = repo.listSessions(app.db);
   const rows = all.filter((s) => historyFilter === 'all' || (historyFilter === 'detailed' ? s.fidelity !== 'partial_reconstruction' : s.fidelity === 'partial_reconstruction'));
+  return h('div', { class: 'stack' },
+    h('header', { class: 'page-head' }, h('h1', {}, 'History'), h('p', { class: 'muted' }, `${all.length} sessions`)),
+    calendarCard(app, all),
+    segmented([['all', 'All'], ['detailed', 'Detailed'], ['partial', 'Partial']], historyFilter, (v) => { historyFilter = v; app.render(); }, 'Filter sessions'),
+    ...sessionsByMonth(app, rows),
+    h('p', { class: 'tiny muted' }, 'The imported history is a best-effort compilation, not every workout you ever did. Partial dates are summaries only.'));
+}
+
+let calMonth = null;
+function calendarCard(app, sessions) {
+  const today = todaySgt();
+  calMonth ??= today.slice(0, 7);
+  const cal = calendarMonth(sessions, calMonth);
+  const monday = weekStart(today);
+  const thisWeek = sessions.filter((s) => s.date_local >= monday && s.date_local < addDays(monday, 7) && s.fidelity !== 'partial_reconstruction').length;
+  const goal = app.db.get('SELECT frequency_goal FROM users LIMIT 1')?.frequency_goal;
+  const open = (day) => {
+    if (day.sessions.length === 1) { app.go(`#/session/${day.sessions[0].id}`); return; }
+    const ref = sheet(longDate(day.date), h('div', {}, ...day.sessions.map((s) => h('a', { class: 'list-row', href: `#/session/${s.id}`, onclick: () => ref.close() }, s.label || 'Workout'))));
+  };
+  return h('section', { class: 'card tight' },
+    h('div', { class: 'row between period-nav' },
+      h('button', { class: 'icon-btn', 'aria-label': 'Previous month', onclick: () => { calMonth = addMonths(calMonth, -1); app.render(); } }, '‹'),
+      h('strong', {}, monthName(calMonth)),
+      h('button', { class: 'icon-btn', 'aria-label': 'Next month', onclick: () => { calMonth = addMonths(calMonth, 1); app.render(); } }, '›')),
+    h('div', { class: 'cal', role: 'grid', 'aria-label': `Training days, ${monthName(calMonth)}` },
+      ...['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => h('span', { class: 'cal-head', 'aria-hidden': 'true' }, d)),
+      ...cal.weeks.flat().map((d) => {
+        const kind = !d.sessions.length ? '' : d.sessions.some((s) => s.fidelity !== 'partial_reconstruction') ? 'detailed' : 'partial';
+        const label = `${longDate(d.date)}${kind === 'detailed' ? ', workout logged' : kind === 'partial' ? ', partial notes' : ''}`;
+        return kind && d.inMonth
+          ? h('button', { class: `cal-day ${kind} ${d.date === today ? 'today' : ''}`, 'aria-label': label, onclick: () => open(d) }, Number(d.date.slice(8)))
+          : h('span', { class: `cal-day ${d.inMonth ? '' : 'out'} ${d.date === today ? 'today' : ''}`, 'aria-label': d.inMonth ? label : null }, d.inMonth ? Number(d.date.slice(8)) : '');
+      })),
+    h('div', { class: 'legend small' }, h('span', {}, h('i', { class: 'sw sw-within' }), 'Logged'), h('span', {}, h('i', { class: 'sw sw-partial' }), 'Partial notes'), h('span', { class: 'muted' }, 'Blank: not recorded')),
+    h('p', { class: 'small' }, `This week: ${thisWeek} workout${thisWeek === 1 ? '' : 's'}`, goal ? ` · goal ${goal}` : ''),
+    cal.undated.length > 0 && h('p', { class: 'tiny muted' }, `${cal.undated.length} session${cal.undated.length === 1 ? ' has' : 's have'} no date and appear only in the list below.`));
+}
+
+function sessionsByMonth(app, rows) {
   const groups = new Map();
   for (const s of rows) {
     const k = s.date_local ? `${MONTHS[Number(s.date_local.slice(5, 7)) - 1]} ${s.date_local.slice(0, 4)}` : 'Date unknown';
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(s);
   }
+  return [...groups].map(([k, list]) => h('section', {}, h('h2', { class: 'section-title' }, k), ...list.map((s) => sessionRow(app, s))));
+}
+
+const PROGRESS_TABS = [['week', 'Week'], ['month', 'Month'], ['weight', 'Weight'], ['machines', 'Machines']];
+export function renderExercises(app, tab = 'week') {
+  tab = PROGRESS_TABS.some(([k]) => k === tab) ? tab : 'week';
+  const body = tab === 'week' ? renderWeek(app, { bodyMap }) : tab === 'month' ? renderMonth(app) : tab === 'weight' ? renderWeight(app) : machineList(app);
   return h('div', { class: 'stack' },
-    h('header', { class: 'page-head' }, h('h1', {}, 'History'), h('p', { class: 'muted' }, `${all.length} sessions`)),
-    segmented([['all', 'All'], ['detailed', 'Detailed'], ['partial', 'Partial']], historyFilter, (v) => { historyFilter = v; app.render(); }, 'Filter sessions'),
-    ...[...groups].map(([k, list]) => h('section', {}, h('h2', { class: 'section-title' }, k), ...list.map((s) => sessionRow(app, s)))),
-    h('p', { class: 'tiny muted' }, 'The imported history is a best-effort compilation, not every workout you ever did. Partial dates are summaries only.'));
+    h('header', { class: 'page-head' }, h('h1', {}, 'Progress')),
+    h('nav', { class: 'tabs', 'aria-label': 'Progress views' }, ...PROGRESS_TABS.map(([k, l]) => h('a', { href: `#/exercises/${k}`, class: k === tab ? 'on' : '', 'aria-current': k === tab ? 'page' : 'false' }, l))),
+    body);
 }
 
 let exQuery = '';
-export function renderExercises(app) {
+function machineList(app) {
   const vs = repo.listVariants(app.db).filter((v) => v.sessions > 0);
   const q = h('input', { type: 'search', placeholder: 'Search exercise or machine', value: exQuery, 'aria-label': 'Search exercises' });
   const list = h('div', { class: 'stack-s' });
@@ -53,7 +104,7 @@ export function renderExercises(app) {
   q.addEventListener('input', () => { exQuery = q.value; draw(); });
   draw();
   return h('div', { class: 'stack' },
-    h('header', { class: 'page-head' }, h('h1', {}, 'Progress'), h('p', { class: 'muted' }, 'Records are per exact machine and variation — never compared across brands.')),
+    h('p', { class: 'muted small' }, 'Records are per exact machine and variation — never compared across brands.'),
     q, list);
 }
 
@@ -81,7 +132,7 @@ export function renderExercise(app, variantId) {
 
   return h('div', { class: 'stack' },
     h('header', { class: 'page-head' },
-      h('a', { class: 'link small', href: '#/exercises' }, '‹ Progress'),
+      h('a', { class: 'link small', href: '#/exercises/machines' }, '‹ Progress'),
       h('h1', {}, v.exercise_name),
       h('p', { class: 'muted' }, [v.brand !== 'unspecified' ? v.brand : 'Brand unspecified', v.equipment_description, v.variation].filter(Boolean).join(' · '),
         ` · load ${v.load_basis === 'total' ? 'is the stack total' : v.load_basis === 'per_side' ? 'is per side (×2 for volume)' : v.load_basis === 'per_limb' ? 'is per arm/leg' : 'convention unknown'}`)),
@@ -114,7 +165,27 @@ export function renderExercise(app, variantId) {
     others.length > 0 && h('section', { class: 'card' }, h('h3', {}, 'Same exercise, other machines'),
       h('p', { class: 'tiny muted' }, 'Reference only — resistance curves differ, so loads are not comparable.'),
       ...others.map((o) => h('a', { class: 'list-row', href: `#/exercise/${o.id}` }, h('div', { class: 'grow' }, o.label), h('span', { class: 'muted small' }, shortDate(o.last_date))))),
+    muscleEditor(app, v),
     machineSettings(app, v, rmin, rmax, others));
+}
+
+function muscleEditor(app, v) {
+  const { db } = app;
+  const cur = repo.getMuscles(db).get(v.exercise_id) ?? { primary: null, secondary: [] };
+  const primary = h('select', { 'aria-label': 'Main muscle' }, h('option', { value: '' }, '— none —'), ...MUSCLES.map((m) => h('option', { value: m, selected: m === cur.primary }, m)));
+  const boxes = MUSCLES.map((m) => h('label', { class: 'check' }, h('input', { type: 'checkbox', value: m, checked: cur.secondary.includes(m) }), m));
+  const summaryText = cur.primary ? `${cur.primary}${cur.secondary.length ? ` + ${cur.secondary.join(', ')}` : ''}` : 'not chosen';
+  return h('details', { class: 'card', open: !cur.primary }, h('summary', {}, `Muscles: ${summaryText}`),
+    h('div', { class: 'stack-s' },
+      h('p', { class: 'tiny muted' }, `Applies to every machine for ${v.exercise_name}. Main muscle counts 1 per set, secondary ½.`),
+      field('Main muscle', primary),
+      h('fieldset', { class: 'fs' }, h('legend', {}, 'Secondary muscles'), h('div', { class: 'checks' }, ...boxes)),
+      h('button', { class: 'btn primary', onclick: () => {
+        const secondary = boxes.map((b) => b.querySelector('input')).filter((i) => i.checked).map((i) => i.value);
+        repo.setExerciseMuscles(db, v.exercise_id, { primary: primary.value || null, secondary }, 'muscles edited');
+        toast('Muscles saved. Weekly counts use them now.');
+        app.render();
+      } }, 'Save muscles')));
 }
 
 function prTile(app, v, label, r) {

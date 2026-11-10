@@ -111,7 +111,7 @@ function render() {
     if (app.needsSetup) node = renderSetup();
     else if (route === 'session') node = renderSession(app, decodeURIComponent(arg));
     else if (route === 'history') node = renderHistory(app);
-    else if (route === 'exercises') node = renderExercises(app);
+    else if (route === 'exercises') node = renderExercises(app, arg);
     else if (route === 'exercise') node = renderExercise(app, decodeURIComponent(arg));
     else if (route === 'plan') node = renderPlan(app);
     else if (route === 'settings') node = renderSettings(app, arg);

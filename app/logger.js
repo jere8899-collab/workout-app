@@ -87,7 +87,8 @@ function exerciseView(app, g, e) {
   const drafts = repo.listDrafts(db, e.id);
 
   const records = history.filter((h) => h.session.fidelity !== 'partial_reconstruction').flatMap((h) => h.sets);
-  const prs = new Map(e.sets.map((s) => [s.id, livePRs(s, [...records, ...e.sets.filter((x) => x.session_order < s.session_order)])]));
+  // A first session on a machine sets the baseline; it has nothing to beat yet.
+  const prs = new Map(e.sets.map((s) => [s.id, records.length ? livePRs(s, [...records, ...e.sets.filter((x) => x.session_order < s.session_order)]) : []]));
   return { e, rec, drafts, history, prs, prevSets: prevAll.slice(0, e.sets.length), prevDrafts };
 }
 

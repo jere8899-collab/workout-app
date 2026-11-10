@@ -1,12 +1,10 @@
 // Settings: units, rest defaults, body weight, machine library, backup/export/import,
 // import review and edit history.
-import { h, field, numInput, numVal, segmented, toast, confirmSheet, download, pickFile, badge, shortDate } from './ui.js';
+import { h, field, numInput, numVal, segmented, toast, confirmSheet, download, pickFile, badge } from './ui.js';
 import * as repo from '../lib/db/repo.js';
 import { exportBackup, restoreBackup, exportSetsCsv, exportCardioCsv } from '../lib/io/export.js';
 import { importCanonical, importFlatCsv } from '../lib/io/import.js';
 import { REST_DEFAULT_SEC } from '../lib/catalog.js';
-import { randomId } from '../lib/util.js';
-import { todaySgt } from '../lib/domain/time.js';
 
 const SECTIONS = [['general', 'General'], ['machines', 'Machines'], ['data', 'Backup & import'], ['import', 'Import review'], ['audit', 'Edit history']];
 
@@ -29,8 +27,6 @@ function general(app) {
   const { db } = app;
   const rest = repo.getSetting(db, 'rest_sec', {});
   const inputs = Object.fromEntries(Object.keys(REST_DEFAULT_SEC).map((k) => [k, numInput(rest[k] ?? REST_DEFAULT_SEC[k], { step: 15, inputmode: 'numeric' })]));
-  const bw = numInput(null, { placeholder: 'kg' });
-  const metrics = db.all("SELECT * FROM body_metrics ORDER BY COALESCE(date_local, '9999') DESC");
   const technique = techniqueNote(db);
   return h('div', { class: 'stack' },
     h('section', { class: 'card' }, h('h3', {}, 'Units'),
@@ -46,14 +42,7 @@ function general(app) {
         toast('Saved');
       } }, 'Save')),
     h('section', { class: 'card' }, h('h3', {}, 'Body weight'),
-      h('p', { class: 'tiny muted' }, 'Used for calorie estimates (latest entry on or before each session).'),
-      h('div', { class: 'row gap' }, bw, h('button', { class: 'btn', onclick: () => {
-        if (!numVal(bw)) return;
-        repo.ensureUser(db);
-        db.insert('body_metrics', { id: randomId('bm'), user_id: repo.USER_ID, date_local: todaySgt(), weight_kg: numVal(bw), context: 'entered in app' });
-        app.render();
-      } }, 'Add today')),
-      h('ul', { class: 'plain small' }, ...metrics.map((m) => h('li', {}, `${m.date_local ? shortDate(m.date_local) + ' ' + m.date_local.slice(0, 4) : 'Undated'}: ${m.weight_kg ?? '—'} kg${m.weight_is_approx ? ' (approx.)' : ''}${m.body_fat_pct ? ` · ~${m.body_fat_pct}% BF` : ''}${m.context ? ` — ${m.context}` : ''}`)))),
+      h('p', { class: 'small' }, 'Used for calorie estimates on and after each date. ', h('a', { href: '#/exercises/weight' }, 'Open the weight chart'))),
     technique && h('section', { class: 'card' }, h('h3', {}, 'Technique note from your history'),
       h('p', { class: 'small' }, technique)));
 }

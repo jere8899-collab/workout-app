@@ -1,6 +1,7 @@
 // Boots SQLite in the browser and persists the database file to IndexedDB.
 import { Db } from '../lib/db/database.js';
 import { importBundled, createTemplatePlan } from '../lib/seed.js';
+import * as repo from '../lib/db/repo.js';
 import { getSetting, setSetting } from '../lib/db/repo.js';
 
 const IDB_NAME = 'workout-tracker';
@@ -84,6 +85,7 @@ export async function boot() {
       needsSetup = true;
     }
   }
+  repo.ensureMuscleDefaults(db);
   return { db, firstRun, needsSetup };
 }
 
