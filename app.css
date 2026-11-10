@@ -353,3 +353,7 @@ textarea { min-height: 64px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* Machine library (specs/003) */
+.pick-head { margin: 12px 0 4px; font-size: 0.9rem; }
+.stack-xs { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }

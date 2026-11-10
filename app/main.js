@@ -6,6 +6,7 @@ import { REST_DEFAULT_SEC } from '../lib/catalog.js';
 import { renderToday, renderSession } from './session.js';
 import { renderHistory, renderExercises, renderExercise } from './browse.js';
 import { renderPlan } from './plan.js';
+import { renderLibrary } from './library.js';
 import { renderSettings } from './settings.js';
 import { closePad } from './pad.js';
 import { initStatus, refreshStatus } from './status.js';
@@ -114,6 +115,7 @@ function render() {
     else if (route === 'exercises') node = renderExercises(app, arg);
     else if (route === 'exercise') node = renderExercise(app, decodeURIComponent(arg));
     else if (route === 'plan') node = renderPlan(app);
+    else if (route === 'library') node = renderLibrary(app, arg);
     else if (route === 'settings') node = renderSettings(app, arg);
     else node = renderToday(app);
   } catch (e) {
@@ -124,7 +126,7 @@ function render() {
   view.replaceChildren(node);
   view.dataset.hash = hash;
   window.scrollTo(0, y);
-  const active = route === 'session' || !route ? '#/today' : route === 'exercise' ? '#/exercises' : `#/${route}`;
+  const active = route === 'session' || !route ? '#/today' : route === 'exercise' || route === 'library' ? '#/exercises' : `#/${route}`;
   document.querySelectorAll('#nav a').forEach((a) => a.setAttribute('aria-current', a.getAttribute('href') === active ? 'page' : 'false'));
   if (!app.needsSetup) refreshStatus();
   if (storage.error) document.getElementById('storage-warning').replaceChildren(h('div', { class: 'warn-bar', role: 'alert' }, storage.error));

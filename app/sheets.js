@@ -3,6 +3,7 @@ import { h, sheet, toast, confirmSheet, field, numInput, numVal, segmented } fro
 import * as repo from '../lib/db/repo.js';
 import { formatSgtTime, sgtToUtc, utcToSgtDate } from '../lib/domain/time.js';
 import { KNOWN_BRANDS } from '../lib/catalog.js';
+import { libraryRows, libraryPickSheet } from './library.js';
 
 export const TYPE_LABEL = { warmup: 'Warm-up', working: 'Working', calibration: 'Calibration', ambiguous: 'Ramp-up/working (unclear)', unclassified: 'Unclassified' };
 
@@ -59,6 +60,30 @@ export function editSetSheet(app, e, s) {
   ref = sheet(`${e.exercise_name} · set ${s.position + 1}`, body);
 }
 
+// Own machines matching a search, most recently used first.
+function ownMatches(all, term) {
+  return all.filter((v) => !term || v.label.toLowerCase().includes(term))
+    .sort((a, b) => (b.last_date ?? '').localeCompare(a.last_date ?? ''));
+}
+
+function ownRow(v, onPick) {
+  return h('button', { class: 'list-row', onclick: () => onPick(v.id) },
+    h('div', { class: 'grow' }, h('div', { class: 'row-title' }, v.exercise_name), h('div', { class: 'muted small' }, [v.brand !== 'unspecified' ? v.brand : 'brand unspecified', v.equipment_description, v.variation].filter(Boolean).join(' · '))),
+    h('div', { class: 'muted tiny' }, v.last_date ? `last ${v.last_date}` : 'never'));
+}
+
+// Joins the previous exercise's superset group, creating a letter if it has none.
+function supersetWithPrevious(db, sessionId) {
+  const g = repo.getSessionGraph(db, sessionId);
+  const prev = g.exercises[g.exercises.length - 1];
+  if (!prev) return null;
+  if (prev.superset_group) return prev.superset_group;
+  const used = new Set(g.exercises.map((x) => x.superset_group).filter(Boolean));
+  const group = 'ABCDEFGH'.split('').find((l) => !used.has(l));
+  repo.updateSessionExercise(db, prev.id, { superset_group: group }, 'superset');
+  return group;
+}
+
 export function addExerciseSheet(app, sessionId, { onPick } = {}) {
   const { db } = app;
   const all = repo.listVariants(db);
@@ -68,30 +93,21 @@ export function addExerciseSheet(app, sessionId, { onPick } = {}) {
   let ref;
   const pick = (variantId) => {
     if (onPick) { onPick(variantId); ref.close(); return; }
-    let group = null;
-    if (ss.querySelector('input').checked) {
-      const g = repo.getSessionGraph(db, sessionId);
-      const prev = g.exercises[g.exercises.length - 1];
-      if (prev) {
-        group = prev.superset_group;
-        if (!group) {
-          const used = new Set(g.exercises.map((x) => x.superset_group).filter(Boolean));
-          group = 'ABCDEFGH'.split('').find((l) => !used.has(l));
-          repo.updateSessionExercise(db, prev.id, { superset_group: group }, 'superset');
-        }
-      }
-    }
+    const group = ss.querySelector('input').checked ? supersetWithPrevious(db, sessionId) : null;
     repo.addSessionExercise(db, sessionId, variantId, { superset_group: group });
     ref.close();
     app.render();
   };
+  const onEntry = (entry) => {
+    ref.close();
+    if (entry.load === 'cardio') cardioSheet(app, sessionId, null, { type: entry.cardioType });
+    else libraryPickSheet(app, entry, { onCreated: pick });
+  };
   const draw = () => {
     const term = q.value.trim().toLowerCase();
-    const rows = all.filter((v) => !term || v.label.toLowerCase().includes(term))
-      .sort((a, b) => (b.last_date ?? '').localeCompare(a.last_date ?? ''));
-    list.replaceChildren(...rows.slice(0, 60).map((v) => h('button', { class: 'list-row', onclick: () => pick(v.id) },
-      h('div', { class: 'grow' }, h('div', { class: 'row-title' }, v.exercise_name), h('div', { class: 'muted small' }, [v.brand !== 'unspecified' ? v.brand : 'brand unspecified', v.equipment_description, v.variation].filter(Boolean).join(' · '))),
-      h('div', { class: 'muted tiny' }, v.last_date ? `last ${v.last_date}` : 'never'))));
+    const own = ownMatches(all, term).slice(0, 60).map((v) => ownRow(v, pick));
+    const lib = libraryRows(app, term, { planMode: !!onPick, onEntry });
+    list.replaceChildren(...(own.length && lib.length ? [h('h3', { class: 'pick-head' }, 'Your machines'), ...own] : own), ...lib);
   };
   q.addEventListener('input', draw);
   draw();
@@ -124,9 +140,9 @@ export function newVariantForm(app, onCreated) {
     } }, 'Create & add'));
 }
 
-export function cardioSheet(app, sessionId, existing = null) {
+export function cardioSheet(app, sessionId, existing = null, preset = {}) {
   const { db } = app;
-  const c = existing ?? {};
+  const c = existing ?? preset;
   const type = h('select', {}, ...[['incline_treadmill', 'Incline treadmill'], ['treadmill', 'Treadmill'], ['bike', 'Bike'], ['elliptical', 'Elliptical'], ['stair_climber', 'Stair climber'], ['rower', 'Rower'], ['other', 'Other']]
     .map(([v, l]) => h('option', { value: v, selected: c.type === v }, l)));
   const brand = h('input', { type: 'text', list: 'brand-names2', value: c.equipment_brand ?? '' });

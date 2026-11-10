@@ -105,6 +105,7 @@ function machineList(app) {
   draw();
   return h('div', { class: 'stack' },
     h('p', { class: 'muted small' }, 'Records are per exact machine and variation — never compared across brands.'),
+    h('a', { class: 'btn block', href: '#/library' }, 'Machine library — AF Singapore machines'),
     q, list);
 }
 

@@ -59,6 +59,7 @@ function machines(app) {
   const brands = [...new Set(eq.map((e) => e.brand))];
   return h('div', { class: 'stack' },
     h('p', { class: 'muted small' }, 'Each brand + machine keeps its own baselines. Set the real weight increment so suggestions use actual plates.'),
+    h('p', { class: 'small' }, h('a', { href: '#/library' }, 'Browse the machine library (AF Singapore)')),
     ...brands.map((b) => h('section', { class: 'card tight' }, h('h3', {}, b === 'unspecified' ? 'Brand unspecified' : b),
       ...eq.filter((e) => e.brand === b).map((e) => {
         const inc = numInput(e.increment_kg, { placeholder: 'auto' });
